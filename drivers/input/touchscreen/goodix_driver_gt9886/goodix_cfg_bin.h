@@ -26,6 +26,8 @@
 #define TS_RQST_FW_RETRY_TIMES 2
 #define TS_LOCKDOWN_REG 0xBDB4
 
+#define GOODIX_TS_ESD 0
+
 #pragma pack(1)
 struct goodix_cfg_pkg_reg {
 	u16 addr;

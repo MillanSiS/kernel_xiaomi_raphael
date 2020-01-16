@@ -63,6 +63,7 @@
 #define GOOIDX_INPUT_PHYS						"goodix_ts/input0"
 #define PINCTRL_STATE_ACTIVE					"pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND					"pmx_ts_suspend"
+#define GOODIX_TS_ESD  0
 extern int goodix_start_cfg_bin(struct goodix_ts_core *ts_core);
 extern int goodix_i2c_write(struct goodix_ts_device *dev, unsigned int reg, unsigned char *data, unsigned int len);
 
@@ -1344,6 +1345,7 @@ exit:
 	return r;
 }
 
+#if GOODIX_TS_ESD
 /**
  * goodix_ts_esd_work - check hardware status and recovery
  *  the hardware if needed.
@@ -1495,6 +1497,7 @@ int goodix_ts_esd_init(struct goodix_ts_core *core)
 	}
 	return 0;
 }
+#endif
 
 /**
  * goodix_ts_suspend - Touchscreen suspend function
@@ -1514,11 +1517,13 @@ int goodix_ts_suspend(struct goodix_ts_core *core_data)
 		goto out;
 	}
 
+#if GOODIX_TS_ESD
 	/*
 	 * notify suspend event, inform the esd protector
 	 * and charger detector to turn off the work
 	 */
 	goodix_ts_blocking_notify(NOTIFY_SUSPEND, NULL);
+#endif
 
 	/* inform external module */
 	mutex_lock(&goodix_modules.mutex);
@@ -1664,11 +1669,13 @@ int goodix_ts_resume(struct goodix_ts_core *core_data)
 	mutex_unlock(&goodix_modules.mutex);
 	goodix_ts_irq_enable(core_data, true);
 out:
+#if GOODIX_TS_ESD
 	/*
 	 * notify resume event, inform the esd protector
 	 * and charger detector to turn on the work
 	 */
 	goodix_ts_blocking_notify(NOTIFY_RESUME, NULL);
+#endif
 
 	ts_err("core_data->fod_pressed = %d\n",core_data->fod_pressed);
 

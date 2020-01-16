@@ -258,8 +258,10 @@ int goodix_cfg_bin_proc(void *data)
 #endif
 	goodix_get_lockdowninfo(core_data);
 
+#if GOODIX_TS_ESD
 	/* esd protector */
 	goodix_ts_esd_init(core_data);
+#endif
 
 	/* generic notifier callback */
 	core_data->ts_notifier.notifier_call = goodix_generic_noti_callback;
