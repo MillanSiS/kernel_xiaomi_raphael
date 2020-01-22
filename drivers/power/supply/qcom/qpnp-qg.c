@@ -42,7 +42,7 @@
 #include "qg-battery-profile.h"
 #include "qg-defs.h"
 
-static int qg_debug_mask = 0;
+static int qg_debug_mask;
 module_param_named(
 	debug_mask, qg_debug_mask, int, 0600
 );
@@ -4107,8 +4107,6 @@ static int qg_parse_dt(struct qpnp_qg *chip)
 		else
 			chip->dt.tcss_entry_soc = temp;
 	}
-
-	chip->dt.bass_enable = of_property_read_bool(node, "qcom,bass-enable");
 
 	chip->dt.multi_profile_load = of_property_read_bool(node,
 					"qcom,multi-profile-load");

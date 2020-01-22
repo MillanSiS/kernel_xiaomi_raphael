@@ -1,5 +1,4 @@
-/* Copyright (c) 2017-2020x The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+/* Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -205,8 +204,7 @@ static int get_hvdcp3_icl_limit(struct pl_data *chip)
 
 	rc = power_supply_get_property(chip->usb_psy,
 				POWER_SUPPLY_PROP_REAL_TYPE, &pval);
-	if ((rc < 0) || (pval.intval != POWER_SUPPLY_TYPE_USB_HVDCP_3
-			&& pval.intval != POWER_SUPPLY_TYPE_USB_HVDCP_3P5))
+	if ((rc < 0) || (pval.intval != POWER_SUPPLY_TYPE_USB_HVDCP_3))
 		return target_icl;
 
 	/*
@@ -1307,26 +1305,11 @@ static int usb_icl_vote_callback(struct votable *votable, void *data,
 
 	vote(chip->pl_disable_votable, ICL_CHANGE_VOTER, false, 0);
 
-	if (!chip->usb_psy)
-		chip->usb_psy = power_supply_get_by_name("usb");
-	if (!chip->usb_psy) {
-		pr_err("Couldn't get usb psy\n");
-		return -ENODEV;
-	}
-
-	rc = power_supply_get_property(chip->usb_psy,
-				POWER_SUPPLY_PROP_SMB_EN_REASON, &pval);
-	if (rc < 0) {
-		pr_err("Couldn't get cp reason rc=%d\n", rc);
-		return rc;
-	}
-
 	/* Configure ILIM based on AICL result only if input mode is USBMID */
 	if (cp_get_parallel_mode(chip, PARALLEL_INPUT_MODE)
 					== POWER_SUPPLY_PL_USBMID_USBMID)
 		cp_configure_ilim(chip, ICL_CHANGE_VOTER, icl_ua);
 
-        cp_configure_ilim(chip, ICL_CHANGE_VOTER, icl_ua);
 	return 0;
 }
 
