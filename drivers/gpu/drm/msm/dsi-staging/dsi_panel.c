@@ -672,6 +672,9 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 		return -EINVAL;
 	}
 
+	if (panel->fod_hbm_status)
+		return 0;
+
 	dsi = &panel->mipi_device;
 
 	if (panel->bl_config.dcs_type_ss)
@@ -772,6 +775,49 @@ int dsi_panel_enable_doze_backlight(struct dsi_panel *panel, u32 bl_lvl)
 	}
 
 	panel->last_bl_lvl = bl_lvl;
+	return rc;
+}
+
+int dsi_panel_set_normal_backlight(struct dsi_panel *panel, u32 bl_lvl)
+{
+	int rc = 0;
+
+	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_DIMMINGOFF);
+	if (rc)
+		pr_err("[%s] failed to send DSI_CMD_SET_DISP_DIMMINGOFF cmd, rc=%d\n",
+				panel->name, rc);
+
+	return rc;
+}
+
+int dsi_panel_set_fod_hbm_backlight(struct dsi_panel *panel, bool status) {
+
+	u32 bl_level;
+	int rc = 0;
+
+	if (status == panel->fod_hbm_status)
+		return 0;
+
+	if (status) {
+		bl_level = panel->bl_config.bl_max_level;
+
+		if (panel->doze_state) {
+			dsi_panel_set_normal_backlight(panel, bl_level);
+		}
+
+		dsi_panel_update_backlight(panel, bl_level);
+		panel->fod_hbm_status = true;
+	} else {
+		bl_level = panel->bl_config.bl_level;
+
+		panel->fod_hbm_status = false;
+		dsi_panel_update_backlight(panel, panel->bl_config.bl_level);
+
+		if (panel->doze_state) {
+			dsi_panel_set_doze_backlight(panel, bl_level);
+		}
+	}
+
 	return rc;
 }
 
@@ -3583,6 +3629,7 @@ static int dsi_panel_parse_mi_config(struct dsi_panel *panel,
 	dsi_panel_parse_elvss_dimming_config(panel);
 
 	panel->fod_hbm_enabled = false;
+	panel->fod_hbm_status = false;
 	panel->skip_dimmingon = STATE_NONE;
 	panel->fod_backlight_flag = false;
 	panel->backlight_delta = 1;
@@ -5404,6 +5451,7 @@ int dsi_panel_disable(struct dsi_panel *panel)
 	panel->panel_initialized = false;
 	panel->skip_dimmingon = STATE_NONE;
 	panel->fod_hbm_enabled = false;
+	panel->fod_hbm_status = false;
 	panel->in_aod = false;
 	panel->fod_backlight_flag = false;
 	panel->power_mode = SDE_MODE_DPMS_OFF;

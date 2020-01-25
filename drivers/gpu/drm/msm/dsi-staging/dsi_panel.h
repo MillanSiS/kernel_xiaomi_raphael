@@ -231,6 +231,7 @@ struct dsi_panel {
 	s32 backlight_delta;
 
 	bool fod_hbm_enabled; /* prevent set DISPPARAM_DOZE_BRIGHTNESS_HBM/LBM in FOD HBM */
+	bool fod_hbm_status;
 	u32 doze_backlight_threshold;
 	u32 fod_off_dimming_delay;
 	ktime_t fod_hbm_off_time;
@@ -249,6 +250,7 @@ struct dsi_panel {
 	u32 fod_target_backlight;
 	bool fod_flag;
 	bool in_aod; /* set  DISPPARAM_DOZE_BRIGHTNESS_HBM/LBM only in AOD */
+	bool doze_state;
 
 	/* Display count */
 	bool panel_active_count_enable;
@@ -266,8 +268,6 @@ struct dsi_panel {
 
 	int power_mode;
 	enum dsi_panel_physical_type panel_type;
-
-	bool doze_state;
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)
@@ -383,4 +383,6 @@ int dsi_panel_parse_esd_reg_read_configs(struct dsi_panel *panel);
 void dsi_panel_ext_bridge_put(struct dsi_panel *panel);
 
 int dsi_panel_set_doze_backlight(struct dsi_panel *panel, u32 bl_lvl);
+int dsi_panel_set_fod_hbm_backlight(struct dsi_panel *panel, bool status);
+
 #endif /* _DSI_PANEL_H_ */
