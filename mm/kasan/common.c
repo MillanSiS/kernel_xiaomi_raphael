@@ -76,7 +76,7 @@ static inline depot_stack_handle_t save_stack(gfp_t flags)
 	save_stack_trace(&trace);
 	filter_irq_stacks(&trace);
 
-	return depot_save_stack(&trace, flags);
+	return depot_save_stack(&trace, flags, 0);
 }
 
 static inline void set_track(struct kasan_track *track, gfp_t flags)
