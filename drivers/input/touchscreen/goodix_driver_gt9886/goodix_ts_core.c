@@ -754,11 +754,11 @@ static int goodix_ts_input_report(struct input_dev *dev,
 			/*point position*/
 			input_report_abs(dev, ABS_MT_POSITION_X, coords->x);
 			input_report_abs(dev, ABS_MT_POSITION_Y, coords->y);
-			/*
+
 			input_report_abs(dev, ABS_MT_TOUCH_MAJOR, coords->w);
-			input_report_abs(dev, ABS_MT_PRESSURE, coords->p);
+			// input_report_abs(dev, ABS_MT_PRESSURE, coords->p);
 			input_report_abs(dev, ABS_MT_TOUCH_MINOR, coords->area);
-			*/
+
 
 			if ((core_data->event_status & 0x88) != 0x88 || !core_data->fod_status)
 				coords->overlapping_area = 0;
@@ -787,7 +787,7 @@ static int goodix_ts_input_report(struct input_dev *dev,
 
 	/*report finger*/
 	/*ts_info("get_event_now :0x%02x, pre_event : %d", get_event_now, pre_event);*/
-	if ((core_data->event_status & 0x88) == 0x88 && core_data->fod_status) {
+	if ((core_data->event_status & 0x88) == 0x88 && core_data->fod_enabled) {
 			input_report_key(core_data->input_dev, BTN_INFO, 1);
 			/*input_report_key(core_data->input_dev, KEY_INFO, 1);*/
 			core_data->fod_pressed = true;
@@ -978,12 +978,40 @@ EXPORT_SYMBOL(goodix_ts_irq_enable);
 static int goodix_ts_power_init(struct goodix_ts_core *core_data)
 {
 	struct goodix_ts_board_data *ts_bdata;
-        ts_bdata = board_data(core_data);
-
-        gpio_direction_output(ts_bdata->reset_gpio, 0);
-        gpio_direction_output(ts_bdata->irq_gpio, 1);
-
-	return 0;
+	struct device *dev = NULL;
+	int r = 0;
+	ts_info("Power init");
+	/*  dev:i2c client device or spi slave device*/
+	dev =  core_data->ts_dev->dev;
+	ts_bdata = board_data(core_data);
+	gpio_direction_output(ts_bdata->reset_gpio, 0);
+	gpio_direction_output(ts_bdata->irq_gpio, 1);
+	if (ts_bdata->avdd_name) {
+		core_data->avdd = devm_regulator_get(dev,
+				 ts_bdata->avdd_name);
+		if (IS_ERR_OR_NULL(core_data->avdd)) {
+			r = PTR_ERR(core_data->avdd);
+			ts_err("Failed to get regulator avdd:%d", r);
+			core_data->avdd = NULL;
+			return r;
+		}
+		core_data->avdd_load = ts_bdata->avdd_load;
+	} else {
+		ts_info("Avdd name is NULL");
+	}
+	if (ts_bdata->vddio_name) {
+		core_data->vddio = devm_regulator_get(dev,
+				 ts_bdata->vddio_name);
+		if (IS_ERR_OR_NULL(core_data->vddio)) {
+			r = PTR_ERR(core_data->vddio);
+			ts_err("Failed to get regulator vddio:%d", r);
+			core_data->vddio = NULL;
+			return r;
+		}
+	} else {
+			ts_info("vddio name is NULL");
+	}
+	return r;
 }
 
 /**
@@ -999,8 +1027,37 @@ int goodix_ts_power_on(struct goodix_ts_core *core_data)
 	ts_err("enter::%s\n",__func__);
 	if (core_data->power_on)
 		return 0;
-	gpio_direction_output(ts_bdata->vdd_gpio, 1);
 	gpio_direction_output(ts_bdata->avdd_gpio, 1);
+		if (core_data->vddio) {
+		r = regulator_enable(core_data->vddio);
+		if (!r) {
+			ts_info("regulator enable vddio SUCCESS");
+		} else {
+			ts_err("Failed to enable vddio power:%d", r);
+			return r;
+		}
+	}
+	if (core_data->avdd) {
+		if (core_data->avdd_load) {
+			r = regulator_set_load(core_data->avdd, core_data->avdd_load);
+			if (r<0)
+				ts_err("enable 3v3 fail!");
+			r=regulator_set_voltage(core_data->avdd, 3000000, 3000000);
+			if (r<0)
+				ts_err("enable 3v3 fail!");
+		}
+		r = regulator_enable(core_data->avdd);
+		if (!r) {
+			ts_info("regulator enable avdd SUCCESS");
+			if (ts_bdata->power_on_delay_us)
+				usleep_range(ts_bdata->power_on_delay_us,
+						ts_bdata->power_on_delay_us);
+		} else {
+			ts_err("Failed to enable avdd power:%d", r);
+			return r;
+		}
+	}
+
 	core_data->power_on = 1;
 	return r;
 }
@@ -1018,8 +1075,31 @@ int goodix_ts_power_off(struct goodix_ts_core *core_data)
 	ts_info("Device power off");
 	if (!core_data->power_on)
 		return 0;
-	gpio_direction_output(ts_bdata->vdd_gpio, 0);
-	gpio_direction_output(ts_bdata->avdd_gpio, 0);
+	if (core_data->vddio) {
+		r = regulator_disable(core_data->vddio);
+		if (!r) {
+			ts_info("regulator disable vddio SUCCESS");
+		} else {
+			ts_err("Failed to disable vddio power:%d", r);
+			return r;
+		}
+	}
+	if (core_data->avdd) {
+		r = regulator_disable(core_data->avdd);
+		if (!r) {
+			ts_info("regulator disable avdd SUCCESS");
+			if (ts_bdata->power_off_delay_us)
+				usleep_range(ts_bdata->power_off_delay_us,
+						ts_bdata->power_off_delay_us);
+		} else {
+			ts_err("Failed to disable avdd power:%d", r);
+			return r;
+		}
+
+			if (core_data->avdd_load)
+			regulator_set_load(core_data->avdd, 0);
+	}
+
 	core_data->power_on = 0;
 	return r;
 }
@@ -1199,7 +1279,7 @@ static int goodix_input_event(struct input_dev *dev, unsigned int type,
 			ms.mode = (unsigned char)value;
 			if (value >= INPUT_EVENT_WAKUP_MODE_OFF && value <= INPUT_EVENT_WAKUP_MODE_ON) {
 				ms.info->double_wakeup = value - INPUT_EVENT_WAKUP_MODE_OFF;
-				ms.info->gesture_enabled = ms.info->double_wakeup | ms.info->fod_status;
+				ms.info->gesture_enabled = ms.info->double_wakeup || ms.info->aod_status;
 				/*goodix_gesture_enable(!!info->gesture_enabled);*/
 #ifdef CONFIG_GOODIX_HWINFO
 				snprintf(ch, sizeof(ch), "%s", ms.info->gesture_enabled ? "enabled" : "disabled");
@@ -1529,11 +1609,14 @@ int goodix_ts_suspend(struct goodix_ts_core *core_data)
 
 			r = ext_module->funcs->before_suspend(core_data, ext_module);
 			if (r == EVT_CANCEL_SUSPEND) {
-				if (core_data->double_wakeup && core_data->fod_status) {
+				if (core_data->double_wakeup &&
+					(core_data->aod_status || core_data->fod_enabled)) {
 					atomic_set(&core_data->suspend_stat, TP_GESTURE_DBCLK_FOD);
-				} else if (core_data->double_wakeup) {
+				} else if (core_data->double_wakeup &&
+					(!core_data->aod_status && !core_data->fod_enabled)) {
 					atomic_set(&core_data->suspend_stat, TP_GESTURE_DBCLK);
-				} else if (core_data->fod_status) {
+				} else if (core_data->fod_status &&
+					(core_data->fod_enabled || core_data->aod_status)) {
 					atomic_set(&core_data->suspend_stat, TP_GESTURE_FOD);
 				}
 				mutex_unlock(&goodix_modules.mutex);
@@ -1586,6 +1669,7 @@ int goodix_ts_suspend(struct goodix_ts_core *core_data)
 out:
 	/* release all the touch IDs */
 	release_all_touches(core_data);
+	goodix_ts_irq_enable(core_data, true);
 	core_data->ts_event.event_data.touch_data.touch_num = 0;
 
 	sysfs_notify(&core_data->gtp_touch_dev->kobj, NULL,
@@ -2146,9 +2230,9 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	core_data->is_usb_exist = -1;
 	/*i2c test*/
 	r = ts_device->hw_ops->read_trans(ts_device, 0x3100, &read_val, 1);
-	if (!r)
+	if (!r) {
 		ts_info("i2c test SUCCESS");
-	else {
+	} else {
 		ts_err("i2c test FAILED");
 		goto out;
 	}
@@ -2209,8 +2293,9 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	core_data->dbclick_count = 0;
 #endif
 
-	/*core_data->fod_status = -1;*/
-	//wake_lock_init(&core_data->tp_wakelock, WAKE_LOCK_SUSPEND, "touch_locker");
+	core_data->fod_status = -1;
+	core_data->fod_enabled = false;
+
 #ifdef CONFIG_TOUCHSCREEN_GOODIX_DEBUG_FS
 	core_data->debugfs = debugfs_create_dir("tp_debug", NULL);
 	if (core_data->debugfs) {
@@ -2293,3 +2378,4 @@ module_exit(goodix_ts_core_exit);
 MODULE_DESCRIPTION("Goodix Touchscreen Core Module");
 MODULE_AUTHOR("Goodix, Inc.");
 MODULE_LICENSE("GPL v2");
+
